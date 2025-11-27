@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white flex flex-col h-screen p-6">
+
+    <div class="flex flex-1 flex-col justify-center max-w-md mx-auto w-full">
+        <!-- Logo Animation -->
+        <div class="flex justify-center mb-8">
+            <div class="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-primary animate-pulse border-2 border-primary/20">
+                <!-- SVG Icon Replaced Here -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                </svg>
+            </div>
+        </div>
+
+        <h1 class="text-3xl font-bold text-center mb-2">Welcome Back</h1>
+        <p class="text-gray-400 text-center mb-10 text-sm">Enter your email to receive a login link.</p>
+
+        <!-- Input Field -->
+        <div class="flex flex-col gap-4">
+            <label class="text-sm text-primary font-medium ml-1">Email Address</label>
+            <input id="email" type="email" placeholder="name@example.com" 
+                   class="w-full bg-[#1A2B20] border border-gray-600 text-white text-lg rounded-xl p-4 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+        </div>
+
+        <!-- Button -->
+        <button onclick="sendMagicLink()" id="loginBtn"
+                class="w-full bg-primary text-black font-bold text-lg p-4 rounded-full mt-8 shadow-[0_4px_14px_rgba(19,236,91,0.4)] active:scale-95 transition-transform">
+            Send Login Link
+        </button>
+    </div>
+
+    <!-- Config File Load -->
+    <script src="supabase-config.js"></script>
+    <script>
+        async function sendMagicLink() {
+            const email = document.getElementById('email').value;
+            const btn = document.getElementById('loginBtn');
+            
+            if (!email.includes('@')) {
+                alert("Please enter a valid email.");
+                return;
+            }
+
+            btn.innerText = "Sending Link...";
+            btn.disabled = true;
+            btn.classList.add('opacity-70');
+
+            // Magic Link Logic
+            // Important: Apne Supabase Dashboard > Authentication > URL Configuration mein
+            // "Site URL" ko apne index.html ke path par set karein
+            
+            const { data, error } = await window.supabase.auth.signInWithOtp({
+                email: email,
+                options: {
+                    // Jab user link par click karega, woh wapas index.html par aayega
+                    emailRedirectTo: window.location.origin + '/index.html'
+                }
+            });
+
+            if (error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Send Login Link";
+                btn.disabled = false;
+                btn.classList.remove('opacity-70');
+            } else {
+                // Success: Go to "Check Email" screen
+                localStorage.setItem('user_email', email);
+                window.location.href = 'verify_email.html';
+            }
+        }
+    </script>
+</body>
+</html>

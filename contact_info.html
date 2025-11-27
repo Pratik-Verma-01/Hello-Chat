@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Info - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col overflow-y-auto">
+
+    <!-- Header (Transparent) -->
+    <div class="absolute top-0 left-0 p-4 z-10 w-full flex justify-between">
+        <span class="material-symbols-outlined cursor-pointer text-white drop-shadow-md text-3xl" onclick="window.history.back()">arrow_back</span>
+        <span class="material-symbols-outlined cursor-pointer text-white drop-shadow-md text-3xl" onclick="window.history.back()">more_vert</span>
+    </div>
+
+    <!-- Big Profile Picture -->
+    <div class="w-full h-96 relative shrink-0">
+        <img id="infoAvatar" src="" class="w-full h-full object-cover">
+        <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#102216] to-transparent h-32"></div>
+        <div class="absolute bottom-4 left-4">
+            <h1 id="infoName" class="text-3xl font-bold shadow-black drop-shadow-md">Loading...</h1>
+            <p id="infoUsername" class="text-primary font-mono text-sm shadow-black drop-shadow-sm">@...</p>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="p-4 space-y-4">
+        
+        <!-- Bio Card -->
+        <div class="bg-[#1A2B20] p-4 rounded-xl shadow-sm border border-gray-800">
+            <p class="text-gray-400 text-xs uppercase tracking-widest mb-1 font-bold">About</p>
+            <p id="infoAbout" class="text-lg leading-relaxed">...</p>
+            <p class="text-gray-500 text-xs mt-3">Joined recently</p>
+        </div>
+
+        <!-- Action Buttons (Real Working) -->
+        <div class="flex gap-3">
+            <button onclick="initiateCall('audio')" class="flex-1 bg-[#1A2B20] p-4 rounded-xl flex flex-col items-center gap-2 text-primary hover:bg-[#233a2b] transition border border-gray-800 active:scale-95">
+                <span class="material-symbols-outlined text-3xl">call</span>
+                <span class="text-xs font-bold tracking-wide">Audio</span>
+            </button>
+            <button onclick="initiateCall('video')" class="flex-1 bg-[#1A2B20] p-4 rounded-xl flex flex-col items-center gap-2 text-primary hover:bg-[#233a2b] transition border border-gray-800 active:scale-95">
+                <span class="material-symbols-outlined text-3xl">videocam</span>
+                <span class="text-xs font-bold tracking-wide">Video</span>
+            </button>
+            <button onclick="goToChat()" class="flex-1 bg-[#1A2B20] p-4 rounded-xl flex flex-col items-center gap-2 text-primary hover:bg-[#233a2b] transition border border-gray-800 active:scale-95">
+                <span class="material-symbols-outlined text-3xl">chat</span>
+                <span class="text-xs font-bold tracking-wide">Message</span>
+            </button>
+        </div>
+
+        <!-- Block/Report (Demo for now) -->
+        <div class="bg-[#1A2B20] rounded-xl shadow-sm overflow-hidden border border-gray-800 mt-4">
+            <div class="p-4 flex items-center gap-3 text-red-500 cursor-pointer hover:bg-red-500/10 transition" onclick="alert('Block feature will be added in next update!')">
+                <span class="material-symbols-outlined">block</span>
+                <span class="font-bold">Block User</span>
+            </div>
+            <div class="h-px bg-gray-700 mx-4"></div>
+            <div class="p-4 flex items-center gap-3 text-red-500 cursor-pointer hover:bg-red-500/10 transition" onclick="alert('Report submitted to Hello Chat Team.')">
+                <span class="material-symbols-outlined">thumb_down</span>
+                <span class="font-bold">Report User</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const receiverId = urlParams.get('uid');
+        let currentUser = null;
+
+        async function loadContactInfo() {
+            if(!receiverId) return;
+            
+            // Get Current User
+            const session = await checkAuth();
+            if(session) currentUser = session.user;
+
+            // Get Receiver Profile
+            const { data: profile } = await window.supabase.from('profiles').select('*').eq('id', receiverId).single();
+            if(profile) {
+                document.getElementById('infoName').innerText = profile.full_name;
+                document.getElementById('infoUsername').innerText = "@" + (profile.username || "unknown");
+                document.getElementById('infoAbout').innerText = profile.about || "Hey there! I am using Hello Chat.";
+                if(profile.avatar_url) document.getElementById('infoAvatar').src = profile.avatar_url;
+                else document.getElementById('infoAvatar').src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=500";
+            }
+        }
+
+        // Feature: Go to Chat
+        function goToChat() {
+            window.location.href = `chat.html?uid=${receiverId}`;
+        }
+
+        // Feature: Make Real Call
+        async function initiateCall(type) {
+            if(!currentUser) return;
+
+            // Create Call in Database
+            const { data, error } = await window.supabase.from('calls').insert({
+                caller_id: currentUser.id,
+                receiver_id: receiverId,
+                type: type, // 'video' or 'audio'
+                status: 'ringing'
+            }).select();
+
+            if(!error && data.length > 0) {
+                // Redirect to Call Screen (Video call screen handles both logic for now)
+                window.location.href = `video_call.html?call_id=${data[0].id}`;
+            } else {
+                alert("Could not connect call. Check internet.");
+            }
+        }
+
+        loadContactInfo();
+    </script>
+</body>
+</html>

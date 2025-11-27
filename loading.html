@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#13ec5b",
+                        "background-dark": "#102216",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display flex flex-col h-screen w-full items-center justify-center">
+
+    <!-- Custom Loader Animation (Aapka wala design) -->
+    <div class="relative flex items-center justify-center">
+        <!-- Outer Ring -->
+        <div class="absolute h-16 w-16 rounded-full border-4 border-gray-700"></div>
+        <!-- Spinning Ring -->
+        <div class="absolute h-16 w-16 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+        
+        <!-- Icon in center -->
+        <svg class="h-6 w-6 text-primary" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+    </div>
+
+    <p class="mt-6 text-gray-400 text-sm animate-pulse tracking-wide">Connecting secure server...</p>
+
+    <!-- Config File -->
+    <script src="supabase-config.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        window.onload = function() {
+            // 3.5 Seconds Wait + Auth Check
+            setTimeout(async () => {
+                try {
+                    // Check Auth (Config file se function call)
+                    const session = await checkAuth();
+                    
+                    if (session) {
+                        window.location.href = 'home.html';
+                    } else {
+                        window.location.href = 'login.html';
+                    }
+                } catch (error) {
+                    console.error("Loading Error:", error);
+                    window.location.href = 'login.html';
+                }
+            }, 3500); // 3.5 Seconds
+        };
+    </script>
+</body>
+</html>

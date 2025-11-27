@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Profile - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216", "error": "#ff4d4d" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white flex flex-col min-h-screen p-6 items-center justify-center">
+
+    <h1 class="text-3xl font-bold mb-2">Create Profile</h1>
+    <p class="text-gray-400 text-sm mb-8">Set up your unique identity.</p>
+
+    <!-- Profile Pic Upload -->
+    <div class="relative mb-8 group cursor-pointer" onclick="document.getElementById('fileInput').click()">
+        <div class="w-32 h-32 bg-[#1A2B20] rounded-full flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden" id="avatarPreview">
+            <span class="material-symbols-outlined text-4xl text-gray-400">person</span>
+        </div>
+        <div class="absolute bottom-0 right-0 bg-primary rounded-full p-2 text-black shadow-lg">
+            <span class="material-symbols-outlined text-xl">photo_camera</span>
+        </div>
+        <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+    </div>
+
+    <!-- Inputs -->
+    <div class="w-full max-w-sm space-y-5">
+        
+        <!-- Full Name -->
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Full Name</label>
+            <input id="fullName" type="text" placeholder="e.g. Rahul Sharma" 
+                   class="w-full bg-[#1A2B20] border border-gray-600 text-white p-4 rounded-xl focus:border-primary focus:outline-none mt-1">
+        </div>
+
+        <!-- Unique Username (The Main Feature) -->
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Unique Username</label>
+            <div class="relative mt-1">
+                <span class="absolute left-4 top-4 text-gray-400 font-bold">@</span>
+                <input id="username" type="text" placeholder="rahul_007" onkeyup="checkUsername()"
+                       class="w-full bg-[#1A2B20] border border-gray-600 text-white p-4 pl-10 rounded-xl focus:outline-none transition-colors">
+                
+                <!-- Status Icon -->
+                <div class="absolute right-4 top-4">
+                    <span id="statusIcon" class="material-symbols-outlined text-lg hidden">check_circle</span>
+                </div>
+            </div>
+            <p id="statusText" class="text-xs ml-2 mt-1 h-4"></p>
+        </div>
+        
+        <!-- Bio -->
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Bio</label>
+            <input id="about" type="text" value="Hey there! I am using Hello Chat." 
+                   class="w-full bg-[#1A2B20] border border-gray-600 text-gray-300 p-4 rounded-xl focus:border-primary focus:outline-none mt-1">
+        </div>
+    </div>
+
+    <!-- Save Button -->
+    <button onclick="saveProfile()" id="saveBtn" disabled
+            class="w-full max-w-sm bg-gray-600 text-black font-bold text-lg p-4 rounded-full mt-10 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+        Save & Continue
+    </button>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        let avatarFile = null;
+        let isUsernameValid = false;
+        let typingTimer;
+
+        // 1. Handle File Preview
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                avatarFile = file;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 2. Check Username Logic (Instagram Style)
+        function checkUsername() {
+            clearTimeout(typingTimer);
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const saveBtn = document.getElementById('saveBtn');
+            
+            let val = input.value.trim().toLowerCase();
+            // Remove spaces and special chars (allow underscore and dot)
+            val = val.replace(/[^a-z0-9_.]/g, "");
+            input.value = val; // Update input visibly
+
+            // Reset UI
+            statusIcon.classList.add('hidden');
+            statusText.innerText = "";
+            input.classList.remove('border-primary', 'border-error');
+            saveBtn.classList.remove('bg-primary');
+            saveBtn.classList.add('bg-gray-600');
+            saveBtn.disabled = true;
+            isUsernameValid = false;
+
+            if (val.length < 3) {
+                statusText.innerText = "Minimum 3 characters required.";
+                statusText.className = "text-xs ml-2 mt-1 text-gray-500";
+                return;
+            }
+
+            // Wait for user to stop typing (Debounce)
+            typingTimer = setTimeout(async () => {
+                statusText.innerText = "Checking availability...";
+                statusText.className = "text-xs ml-2 mt-1 text-yellow-500";
+
+                // Check Database
+                const { data, error } = await window.supabase
+                    .from('profiles')
+                    .select('username')
+                    .eq('username', val)
+                    .single();
+
+                if (data) {
+                    // Taken (Red)
+                    statusIcon.innerText = "cancel";
+                    statusIcon.className = "material-symbols-outlined text-lg text-error";
+                    statusIcon.classList.remove('hidden');
+                    input.classList.add('border-error');
+                    statusText.innerText = "Username is taken.";
+                    statusText.className = "text-xs ml-2 mt-1 text-error";
+                } else {
+                    // Available (Green)
+                    statusIcon.innerText = "check_circle";
+                    statusIcon.className = "material-symbols-outlined text-lg text-primary";
+                    statusIcon.classList.remove('hidden');
+                    input.classList.add('border-primary');
+                    statusText.innerText = "Username available!";
+                    statusText.className = "text-xs ml-2 mt-1 text-primary";
+                    
+                    // Enable Button
+                    saveBtn.classList.remove('bg-gray-600');
+                    saveBtn.classList.add('bg-primary');
+                    saveBtn.disabled = false;
+                    isUsernameValid = true;
+                }
+            }, 500); // 0.5s delay
+        }
+
+        // 3. Save Profile
+        async function saveProfile() {
+            if(!isUsernameValid) return;
+
+            const name = document.getElementById('fullName').value;
+            const username = document.getElementById('username').value;
+            const about = document.getElementById('about').value;
+            const btn = document.getElementById('saveBtn');
+
+            if (!name) return alert("Name is required");
+
+            btn.innerText = "Saving...";
+            const { data: { user } } = await window.supabase.auth.getUser();
+            let avatarUrl = "";
+
+            // Upload Image
+            if (avatarFile) {
+                const fileName = `avatar_${user.id}_${Date.now()}`;
+                const { error: uploadError } = await window.supabase.storage.from('media').upload(fileName, avatarFile);
+                if (!uploadError) {
+                    const { data: urlData } = window.supabase.storage.from('media').getPublicUrl(fileName);
+                    avatarUrl = urlData.publicUrl;
+                }
+            }
+
+            // Insert into DB
+            const { error } = await window.supabase.from('profiles').insert({
+                id: user.id,
+                full_name: name,
+                username: username, // Saving Unique ID
+                about: about,
+                avatar_url: avatarUrl
+            });
+
+            if (error) {
+                console.error(error);
+                if(error.code === '23505') alert("Username just got taken! Try another."); // Duplicate error
+                else alert("Error saving profile");
+            } else {
+                window.location.href = 'home.html';
+            }
+        }
+    </script>
+</body>
+</html>

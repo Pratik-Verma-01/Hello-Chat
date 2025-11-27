@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="flex items-center p-4 border-b border-gray-800 bg-[#1A2B20]">
+        <span class="material-symbols-outlined cursor-pointer mr-4" onclick="window.history.back()">arrow_back</span>
+        <h1 class="text-xl font-bold">Settings</h1>
+    </div>
+
+    <!-- Profile Section -->
+    <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1f3528] transition" onclick="window.location.href='profile_setup.html'">
+        <img id="settingsAvatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-16 h-16 rounded-full object-cover border-2 border-primary">
+        <div>
+            <h2 id="settingsName" class="text-xl font-bold">User Name</h2>
+            <p id="settingsAbout" class="text-gray-400 text-sm">Loading...</p>
+        </div>
+        <div class="ml-auto">
+            <span class="material-symbols-outlined text-primary text-3xl">qr_code_2</span>
+        </div>
+    </div>
+
+    <div class="h-px bg-gray-800 my-1"></div>
+
+    <!-- Options List -->
+    <div class="flex-1 overflow-y-auto p-2">
+        
+        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
+            <span class="material-symbols-outlined text-gray-400 text-2xl">key</span>
+            <div>
+                <h3 class="font-medium">Account</h3>
+                <p class="text-xs text-gray-500">Security notifications, change number</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
+            <span class="material-symbols-outlined text-gray-400 text-2xl">lock</span>
+            <div>
+                <h3 class="font-medium">Privacy</h3>
+                <p class="text-xs text-gray-500">Block contacts, disappearing messages</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
+            <span class="material-symbols-outlined text-gray-400 text-2xl">chat</span>
+            <div>
+                <h3 class="font-medium">Chats</h3>
+                <p class="text-xs text-gray-500">Theme, wallpapers, chat history</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer" onclick="logoutUser()">
+            <span class="material-symbols-outlined text-red-500 text-2xl">logout</span>
+            <div>
+                <h3 class="font-medium text-red-500">Logout</h3>
+                <p class="text-xs text-gray-500">Sign out from this device</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="p-6 text-center">
+        <p class="text-gray-500 text-xs">from</p>
+        <p class="text-primary font-bold text-sm tracking-widest">Super Base</p>
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        async function loadSettings() {
+            const session = await checkAuth();
+            if(!session) return;
+            
+            const { data: profile } = await window.supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            if(profile) {
+                document.getElementById('settingsName').innerText = profile.full_name;
+                document.getElementById('settingsAbout').innerText = profile.about || "Available";
+                if(profile.avatar_url) document.getElementById('settingsAvatar').src = profile.avatar_url;
+            }
+        }
+        loadSettings();
+    </script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chats - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col overflow-hidden relative">
+
+    <!-- SEARCH MODAL (Hidden by default) -->
+    <div id="searchModal" class="fixed inset-0 bg-black/90 z-50 hidden flex-col p-4">
+        <div class="flex items-center gap-4 mb-6">
+            <span class="material-symbols-outlined cursor-pointer text-gray-400" onclick="closeSearch()">arrow_back</span>
+            <input id="searchInput" type="text" placeholder="Search by @username..." onkeyup="searchUser()"
+                   class="w-full bg-transparent text-white text-lg focus:outline-none border-b border-gray-600 pb-2">
+        </div>
+        <div id="searchResults" class="flex-1 overflow-y-auto">
+            <!-- Search Results Here -->
+            <p class="text-gray-500 text-center mt-10 text-sm">Type a username to find people.</p>
+        </div>
+    </div>
+
+    <!-- INCOMING CALL POPUP -->
+    <div id="incomingCallModal" class="fixed inset-0 bg-black/90 z-50 hidden flex-col items-center justify-center text-white transition-opacity duration-300">
+        <div class="flex flex-col items-center animate-bounce">
+            <img id="callerAvatar" src="" class="w-24 h-24 rounded-full border-4 border-primary shadow-[0_0_20px_#13ec5b] object-cover">
+            <h2 id="callerName" class="text-2xl font-bold mt-4">Unknown</h2>
+            <p class="text-primary text-sm font-widest uppercase tracking-widest mt-1">Incoming Video Call...</p>
+        </div>
+        <div class="flex gap-12 mt-16">
+            <button onclick="rejectCall()" class="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg"><span class="material-symbols-outlined text-3xl">call_end</span></button>
+            <button onclick="acceptCall()" class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg animate-pulse"><span class="material-symbols-outlined text-3xl text-black">videocam</span></button>
+        </div>
+    </div>
+
+    <!-- Top Header -->
+    <div class="bg-[#1A2B20] pt-4 pb-2 shadow-md z-10">
+        <div class="flex justify-between items-center px-4 mb-4">
+            <h1 class="text-2xl font-bold text-white tracking-tight">Hello Chat</h1>
+            <div class="flex gap-4 text-white">
+                <span class="material-symbols-outlined cursor-pointer">photo_camera</span>
+                <!-- Search Button -->
+                <span class="material-symbols-outlined cursor-pointer" onclick="openSearch()">search</span>
+                <span class="material-symbols-outlined cursor-pointer" onclick="logoutUser()">more_vert</span>
+            </div>
+        </div>
+        <!-- Tabs -->
+        <div class="flex justify-between text-gray-400 text-sm font-bold uppercase">
+            <div class="w-8 flex justify-center"><span class="material-symbols-outlined text-sm">groups</span></div>
+            <div class="flex-1 text-center border-b-2 border-primary text-primary pb-2 cursor-pointer">Chats</div>
+            <div class="flex-1 text-center pb-2 cursor-pointer hover:text-white" onclick="window.location.href='updates.html'">Updates</div>
+            <div class="flex-1 text-center pb-2 cursor-pointer hover:text-white" onclick="window.location.href='calls.html'">Calls</div>
+        </div>
+    </div>
+
+    <!-- Chat List (All Users) -->
+    <div id="chatList" class="flex-1 overflow-y-auto p-2 space-y-1">
+        <div class="flex justify-center mt-10"><span class="text-gray-500 text-sm animate-pulse">Loading chats...</span></div>
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        let currentCallId = null;
+        let myUserId = null;
+
+        async function initHome() {
+            const session = await checkAuth();
+            if(!session) { window.location.href = 'login.html'; return; }
+            myUserId = session.user.id;
+            loadUsers();
+            listenForCalls();
+        }
+
+        async function loadUsers() {
+            // Load all users initially (You can change this to only recent chats later)
+            const { data: profiles } = await window.supabase.from('profiles').select('*').neq('id', myUserId);
+            const list = document.getElementById('chatList');
+            list.innerHTML = '';
+
+            if(profiles && profiles.length > 0) {
+                profiles.forEach(profile => list.appendChild(createUserItem(profile)));
+            } else {
+                list.innerHTML = `<div class="text-center text-gray-500 mt-20"><p>No users found.</p><p class="text-xs">Use Search icon to find friends.</p></div>`;
+            }
+        }
+
+        // --- SEARCH FEATURE ---
+        function openSearch() {
+            document.getElementById('searchModal').classList.remove('hidden');
+            document.getElementById('searchModal').classList.add('flex');
+            document.getElementById('searchInput').focus();
+        }
+
+        function closeSearch() {
+            document.getElementById('searchModal').classList.add('hidden');
+            document.getElementById('searchModal').classList.remove('flex');
+        }
+
+        async function searchUser() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if(query.length < 2) {
+                resultsDiv.innerHTML = '<p class="text-gray-500 text-center mt-10 text-sm">Type a username...</p>';
+                return;
+            }
+
+            // Search in DB
+            const { data: profiles } = await window.supabase
+                .from('profiles')
+                .select('*')
+                .ilike('username', `%${query}%`) // Partial match
+                .neq('id', myUserId); // Don't show self
+
+            resultsDiv.innerHTML = '';
+            if(profiles && profiles.length > 0) {
+                profiles.forEach(profile => {
+                    const item = createUserItem(profile);
+                    resultsDiv.appendChild(item);
+                });
+            } else {
+                resultsDiv.innerHTML = '<p class="text-gray-500 text-center mt-10 text-sm">No user found.</p>';
+            }
+        }
+
+        // Helper to create list item UI
+        function createUserItem(profile) {
+            const avatar = profile.avatar_url || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+            const item = document.createElement('div');
+            item.className = "flex items-center gap-4 p-3 hover:bg-[#1f3528] rounded-lg cursor-pointer transition-colors border-b border-gray-800";
+            item.onclick = () => window.location.href = `chat.html?uid=${profile.id}`;
+            
+            item.innerHTML = `
+                <div class="relative">
+                    <img src="${avatar}" class="w-12 h-12 rounded-full object-cover border border-gray-700">
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-white font-semibold text-lg capitalize">${profile.full_name}</h3>
+                    </div>
+                    <p class="text-primary text-sm font-mono">@${profile.username || "unknown"}</p>
+                </div>
+            `;
+            return item;
+        }
+
+        // ... (Keep the Call Listening Logic same as before) ...
+        function listenForCalls() {
+            window.supabase.channel('public:calls').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'calls', filter: `receiver_id=eq.${myUserId}` }, async (payload) => {
+                const call = payload.new;
+                if(call.status === 'ringing') {
+                    currentCallId = call.id;
+                    const { data: caller } = await window.supabase.from('profiles').select('*').eq('id', call.caller_id).single();
+                    document.getElementById('callerName').innerText = caller ? caller.full_name : "Unknown";
+                    document.getElementById('callerAvatar').src = caller && caller.avatar_url ? caller.avatar_url : "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+                    const modal = document.getElementById('incomingCallModal');
+                    modal.classList.remove('hidden'); modal.classList.add('flex');
+                    if(typeof playRingtone === "function") playRingtone();
+                }
+            }).subscribe();
+        }
+
+        async function acceptCall() {
+            if(typeof stopRingtone === "function") stopRingtone();
+            await window.supabase.from('calls').update({ status: 'accepted' }).eq('id', currentCallId);
+            window.location.href = `video_call.html?call_id=${currentCallId}`;
+        }
+
+        async function rejectCall() {
+            if(typeof stopRingtone === "function") stopRingtone();
+            await window.supabase.from('calls').update({ status: 'rejected' }).eq('id', currentCallId);
+            document.getElementById('incomingCallModal').classList.add('hidden');
+            document.getElementById('incomingCallModal').classList.remove('flex');
+        }
+
+        initHome();
+    </script>
+</body>
+</html>
