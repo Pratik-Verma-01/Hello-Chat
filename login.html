@@ -27,7 +27,7 @@
         <!-- Logo Animation -->
         <div class="flex justify-center mb-8">
             <div class="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-primary animate-pulse border-2 border-primary/20">
-                <!-- SVG Icon Replaced Here -->
+                <!-- Email Icon -->
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
                 </svg>
@@ -67,15 +67,24 @@
             btn.disabled = true;
             btn.classList.add('opacity-70');
 
-            // Magic Link Logic
-            // Important: Apne Supabase Dashboard > Authentication > URL Configuration mein
-            // "Site URL" ko apne index.html ke path par set karein
+            // --- IMPORTANT: URL SETTING ---
+            // Yahan hum check kar rahe hain ki aap Localhost par hain ya Vercel par
+            // Agar Vercel par hain, toh automatic wahi link use hoga jo URL bar mein hai
             
+            // Lekin safety ke liye, hum seedha woh link bhejenge jo aapne Supabase Dashboard mein add kiya tha
+            // Is line ko dhyan se dekhein:
+            
+            const redirectUrl = window.location.origin + '/index.html';
+            
+            // Agar aap sure hain ki Vercel par hi chalana hai, toh aap niche wali line uncomment karke apna link daal sakte hain:
+            // const redirectUrl = 'https://hello-chat-alpha.vercel.app/index.html';
+
+            console.log("Redirecting to:", redirectUrl); // Debugging ke liye
+
             const { data, error } = await window.supabase.auth.signInWithOtp({
                 email: email,
                 options: {
-                    // Jab user link par click karega, woh wapas index.html par aayega
-                    emailRedirectTo: window.location.origin + '/index.html'
+                    emailRedirectTo: redirectUrl
                 }
             });
 
