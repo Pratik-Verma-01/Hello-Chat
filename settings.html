@@ -25,7 +25,7 @@
 
     <!-- Header -->
     <div class="flex items-center p-4 border-b border-gray-800 bg-[#1A2B20]">
-        <span class="material-symbols-outlined cursor-pointer mr-4" onclick="window.history.back()">arrow_back</span>
+        <span class="material-symbols-outlined cursor-pointer mr-4" onclick="window.location.href='home.html'">arrow_back</span>
         <h1 class="text-xl font-bold">Settings</h1>
     </div>
 
@@ -33,64 +33,60 @@
     <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-[#1f3528] transition" onclick="window.location.href='profile_setup.html'">
         <img id="settingsAvatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-16 h-16 rounded-full object-cover border-2 border-primary">
         <div>
-            <h2 id="settingsName" class="text-xl font-bold">User Name</h2>
-            <p id="settingsAbout" class="text-gray-400 text-sm">Loading...</p>
+            <h2 id="settingsName" class="text-xl font-bold">Loading...</h2>
+            <p id="settingsEmail" class="text-primary text-xs font-mono mb-1">loading@email.com</p>
+            <p id="settingsAbout" class="text-gray-400 text-sm">...</p>
         </div>
         <div class="ml-auto">
-            <span class="material-symbols-outlined text-primary text-3xl">qr_code_2</span>
+            <span class="material-symbols-outlined text-primary text-2xl">edit</span>
         </div>
     </div>
 
     <div class="h-px bg-gray-800 my-1"></div>
 
     <!-- Options List -->
-    <div class="flex-1 overflow-y-auto p-2">
+    <div class="flex-1 overflow-y-auto p-4 space-y-6">
         
-        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
-            <span class="material-symbols-outlined text-gray-400 text-2xl">key</span>
-            <div>
-                <h3 class="font-medium">Account</h3>
-                <p class="text-xs text-gray-500">Security notifications, change number</p>
+        <!-- Change Email Section -->
+        <div>
+            <h3 class="text-gray-400 font-bold text-xs mb-2 uppercase tracking-wider">Account</h3>
+            <div class="bg-[#1A2B20] p-4 rounded-xl space-y-3 border border-gray-700">
+                <label class="text-sm text-white">Change Email Address</label>
+                <input id="newEmail" type="email" placeholder="Enter new email" class="w-full bg-black/30 p-3 rounded-lg text-white border border-gray-600 focus:border-primary focus:outline-none">
+                <button onclick="updateEmail()" class="w-full bg-primary text-black py-3 rounded-lg transition font-bold text-sm shadow-lg active:scale-95">Update Email</button>
             </div>
         </div>
 
-        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
-            <span class="material-symbols-outlined text-gray-400 text-2xl">lock</span>
-            <div>
-                <h3 class="font-medium">Privacy</h3>
-                <p class="text-xs text-gray-500">Block contacts, disappearing messages</p>
+        <!-- Change Password Section -->
+        <div>
+            <h3 class="text-gray-400 font-bold text-xs mb-2 uppercase tracking-wider">Security</h3>
+            <div class="bg-[#1A2B20] p-4 rounded-xl space-y-3 border border-gray-700">
+                <label class="text-sm text-white">Change Password</label>
+                <input id="newPassword" type="password" placeholder="New Password (min 6 chars)" class="w-full bg-black/30 p-3 rounded-lg text-white border border-gray-600 focus:border-primary focus:outline-none">
+                <button onclick="updatePassword()" class="w-full bg-gray-700 hover:bg-white hover:text-black text-white py-3 rounded-lg transition font-bold text-sm shadow-lg active:scale-95">Update Password</button>
             </div>
         </div>
 
-        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer">
-            <span class="material-symbols-outlined text-gray-400 text-2xl">chat</span>
+        <!-- Logout -->
+        <div class="flex items-center gap-4 p-4 hover:bg-red-500/10 rounded-lg cursor-pointer text-red-500 border border-red-500/30 transition" onclick="logoutUser()">
+            <span class="material-symbols-outlined text-2xl">logout</span>
             <div>
-                <h3 class="font-medium">Chats</h3>
-                <p class="text-xs text-gray-500">Theme, wallpapers, chat history</p>
+                <h3 class="font-medium">Logout</h3>
             </div>
         </div>
 
-        <div class="flex items-center gap-4 p-4 hover:bg-[#1f3528] rounded-lg cursor-pointer" onclick="logoutUser()">
-            <span class="material-symbols-outlined text-red-500 text-2xl">logout</span>
-            <div>
-                <h3 class="font-medium text-red-500">Logout</h3>
-                <p class="text-xs text-gray-500">Sign out from this device</p>
-            </div>
-        </div>
-
-    </div>
-
-    <div class="p-6 text-center">
-        <p class="text-gray-500 text-xs">from</p>
-        <p class="text-primary font-bold text-sm tracking-widest">Super Base</p>
     </div>
 
     <script src="supabase-config.js"></script>
     <script>
         async function loadSettings() {
             const session = await checkAuth();
-            if(!session) return;
+            if(!session) { window.location.href = 'login.html'; return; }
             
+            // Show current email from Auth
+            document.getElementById('settingsEmail').innerText = session.user.email;
+
+            // Show profile data
             const { data: profile } = await window.supabase.from('profiles').select('*').eq('id', session.user.id).single();
             if(profile) {
                 document.getElementById('settingsName').innerText = profile.full_name;
@@ -98,6 +94,53 @@
                 if(profile.avatar_url) document.getElementById('settingsAvatar').src = profile.avatar_url;
             }
         }
+
+        // --- UPDATE EMAIL FUNCTION ---
+        async function updateEmail() {
+            const newEmail = document.getElementById('newEmail').value.trim();
+            if(!newEmail || !newEmail.includes('@')) return alert("Please enter a valid email!");
+
+            const btn = event.target;
+            btn.innerText = "Updating...";
+            btn.disabled = true;
+
+            const { data, error } = await window.supabase.auth.updateUser({ email: newEmail });
+
+            if(error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Update Email";
+                btn.disabled = false;
+            } else {
+                alert(`Confirmation link sent to ${newEmail}. Please click the link to confirm change.`);
+                btn.innerText = "Update Email";
+                btn.disabled = false;
+                document.getElementById('newEmail').value = "";
+            }
+        }
+
+        // --- UPDATE PASSWORD FUNCTION ---
+        async function updatePassword() {
+            const newPass = document.getElementById('newPassword').value;
+            if(newPass.length < 6) return alert("Password must be at least 6 characters!");
+
+            const btn = event.target;
+            btn.innerText = "Updating...";
+            btn.disabled = true;
+
+            const { error } = await window.supabase.auth.updateUser({ password: newPass });
+
+            if(error) {
+                alert("Error: " + error.message);
+                btn.innerText = "Update Password";
+                btn.disabled = false;
+            } else {
+                alert("Password updated successfully!");
+                document.getElementById('newPassword').value = "";
+                btn.innerText = "Update Password";
+                btn.disabled = false;
+            }
+        }
+
         loadSettings();
     </script>
 </body>
