@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+   
+   <!-- PWA MANIFEST & ICONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2c24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://i.ibb.co/zhxqCBkm/file-00000000572c7209af845b975946de46.png">
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        });
+    }
+</script>
+   
+    <script>
+        tailwind.config = { darkMode: "class", theme: { extend: { colors: { "primary": "#13ec5b", "background-dark": "#102216" }, fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] } } } }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="p-4 flex items-center bg-[#1A2B20] border-b border-gray-800">
+        <span class="material-symbols-outlined cursor-pointer mr-4" onclick="window.history.back()">arrow_back</span>
+        <h1 class="text-xl font-bold">Group Info</h1>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        
+        <!-- Group Info -->
+        <div class="flex flex-col items-center">
+            <img id="groupIcon" src="" class="w-28 h-28 rounded-full object-cover border-4 border-[#1f2c24] mb-3">
+            <h2 id="groupName" class="text-2xl font-bold">Loading...</h2>
+            <p id="groupCount" class="text-gray-400 text-sm">0 participants</p>
+        </div>
+
+        <!-- Admin Settings (Hidden for members) -->
+        <div id="adminPanel" class="hidden bg-[#1f2c24] p-4 rounded-xl space-y-3">
+            <h3 class="text-primary text-xs font-bold uppercase tracking-widest">Admin Controls</h3>
+            
+            <div class="flex items-center justify-between">
+                <span>Only Admins Can Send Messages</span>
+                <input type="checkbox" id="onlyAdminToggle" class="w-5 h-5 accent-primary" onchange="updateGroupSetting(this)">
+            </div>
+            
+            <button onclick="addParticipant()" class="w-full bg-gray-700 p-2 rounded text-sm hover:bg-gray-600">Add Participant</button>
+        </div>
+
+        <!-- Participants List -->
+        <div>
+            <h3 class="text-gray-400 text-xs font-bold uppercase mb-2">Participants</h3>
+            <div id="memberList" class="space-y-1">
+                <!-- Members Here -->
+            </div>
+        </div>
+
+        <button onclick="exitGroup()" class="w-full bg-red-500/10 text-red-500 p-3 rounded-xl border border-red-500/50 font-bold hover:bg-red-500 hover:text-white transition">Exit Group</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module" src="firebase-config.js"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const groupId = urlParams.get('gid');
+        let currentUser = null;
+        let isAdmin = false;
+
+        async function init() {
+            const session = await checkAuth();
+            if(!session) return window.location.replace('login.html');
+            currentUser = session.user;
+
+            if(!groupId) return window.history.back();
+
+            loadGroupDetails();
+            loadMembers();
+        }
+
+        async function loadGroupDetails() {
+            const { data: group } = await window.supabase.from('groups').select('*').eq('id', groupId).single();
+            if(group) {
+                document.getElementById('groupName').innerText = group.name;
+                document.getElementById('groupIcon').src = group.avatar_url || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+                
+                // Set toggle state
+                document.getElementById('onlyAdminToggle').checked = group.only_admins_message;
+            }
+        }
+
+        async function loadMembers() {
+            const { data: members } = await window.supabase
+                .from('group_members')
+                .select('role, user_id, profiles(full_name, avatar_url, username)')
+                .eq('group_id', groupId);
+
+            const list = document.getElementById('memberList');
+            list.innerHTML = '';
+            document.getElementById('groupCount').innerText = `${members.length} participants`;
+
+            // Check if I am admin
+            const myMember = members.find(m => m.user_id === currentUser.id);
+            isAdmin = myMember && myMember.role === 'admin';
+
+            if(isAdmin) document.getElementById('adminPanel').classList.remove('hidden');
+
+            members.forEach(m => {
+                const isMe = m.user_id === currentUser.id;
+                const profile = m.profiles;
+                const roleBadge = m.role === 'admin' ? '<span class="text-[10px] bg-primary text-black px-2 py-0.5 rounded ml-2">Admin</span>' : '';
+                
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-3 p-3 hover:bg-[#1A2B20] rounded-lg";
+                div.innerHTML = `
+                    <img src="${profile.avatar_url || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="w-10 h-10 rounded-full object-cover">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-sm text-white flex items-center">${isMe ? "You" : profile.full_name} ${roleBadge}</h4>
+                        <p class="text-xs text-gray-400">@${profile.username}</p>
+                    </div>
+                    ${isAdmin && !isMe ? `<span class="material-symbols-outlined text-red-400 cursor-pointer" onclick="removeMember('${m.user_id}')">remove_circle</span>` : ''}
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function updateGroupSetting(checkbox) {
+            if(!isAdmin) return;
+            const val = checkbox.checked;
+            await window.supabase.from('groups').update({ only_admins_message: val }).eq('id', groupId);
+            alert("Group settings updated");
+        }
+
+        async function removeMember(uid) {
+            if(!confirm("Remove this user?")) return;
+            await window.supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', uid);
+            loadMembers();
+        }
+
+        async function exitGroup() {
+            if(!confirm("Exit this group?")) return;
+            await window.supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', currentUser.id);
+            window.location.replace('home.html');
+        }
+
+        function addParticipant() {
+            // Future: Open user selector modal
+            alert("Add Participant feature needs a user selector (Coming Soon)");
+        }
+
+        init();
+    </script>
+</body>
+</html>

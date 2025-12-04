@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Group - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    
+    <!-- PWA MANIFEST & ICONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2c24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://i.ibb.co/zhxqCBkm/file-00000000572c7209af845b975946de46.png">
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        });
+    }
+</script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col">
+
+    <!-- Header -->
+    <div class="bg-[#1A2B20] p-4 flex items-center gap-4 border-b border-gray-800">
+        <!-- Calls custom handleBack function -->
+        <span class="material-symbols-outlined cursor-pointer" onclick="handleBack()">arrow_back</span>
+        <div>
+            <h1 class="text-lg font-bold">New Group</h1>
+            <p class="text-xs text-gray-400">Add participants</p>
+        </div>
+    </div>
+
+    <!-- Step 1: Select Members -->
+    <div id="step1" class="flex-1 overflow-y-auto p-2">
+        <div id="userList" class="space-y-2">
+            <p class="text-center text-gray-500 mt-10">Loading contacts...</p>
+        </div>
+    </div>
+
+    <!-- Step 2: Group Details (Hidden Initially) -->
+    <div id="step2" class="flex-1 flex-col items-center p-6 hidden">
+        <div class="relative mb-6 group cursor-pointer" onclick="document.getElementById('groupIconInput').click()">
+            <div class="w-28 h-28 bg-[#1f2c24] rounded-full flex items-center justify-center border-2 border-gray-600 overflow-hidden" id="groupIconPreview">
+                <span class="material-symbols-outlined text-5xl text-gray-400">groups</span>
+            </div>
+            <div class="absolute bottom-0 right-0 bg-primary rounded-full p-2 text-black shadow-lg border-2 border-[#102216]">
+                <span class="material-symbols-outlined text-lg">photo_camera</span>
+            </div>
+            <input type="file" id="groupIconInput" class="hidden" accept="image/*" onchange="handleIconSelect(event)">
+        </div>
+
+        <input id="groupName" type="text" placeholder="Group Subject" 
+               class="w-full bg-transparent text-white p-2 border-b-2 border-primary focus:outline-none text-center text-xl placeholder-gray-500">
+        
+        <p class="text-gray-500 text-xs mt-4">Provide a group subject and optional group icon</p>
+    </div>
+
+    <!-- FAB (Next / Create) -->
+    <div class="absolute bottom-6 right-6">
+        <button id="fabBtn" onclick="nextStep()" class="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg transition transform hover:scale-110 active:scale-95">
+            <span class="material-symbols-outlined text-black text-2xl font-bold">arrow_forward</span>
+        </button>
+    </div>
+
+    <!-- 1. Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Firebase Config (Auth) -->
+    <script type="module" src="firebase-config.js"></script>
+    <!-- 3. Main Config -->
+    <script src="supabase-config.js"></script>
+
+    <script>
+        let myUserId = null;
+        let selectedUsers = [];
+        let groupIconFile = null;
+        let currentStep = 1;
+
+        async function init() {
+            const session = await checkAuth();
+            if(!session) window.location.replace('login.html');
+            myUserId = session.user.id;
+            loadUsers();
+        }
+
+        // --- BACK BUTTON LOGIC ---
+        function handleBack() {
+            if (currentStep === 2) {
+                // Go back to Step 1
+                currentStep = 1;
+                document.getElementById('step2').classList.add('hidden');
+                document.getElementById('step2').classList.remove('flex');
+                document.getElementById('step1').classList.remove('hidden');
+                
+                // Reset FAB Icon to Arrow
+                document.querySelector('#fabBtn span').innerText = "arrow_forward";
+            } else {
+                // If on Step 1, go back to Home
+                window.location.replace('home.html');
+            }
+        }
+
+        async function loadUsers() {
+            const { data: profiles } = await window.supabase.from('profiles').select('*').neq('id', myUserId);
+            const list = document.getElementById('userList');
+            list.innerHTML = '';
+            
+            if (profiles && profiles.length > 0) {
+                profiles.forEach(profile => {
+                    const item = document.createElement('div');
+                    item.className = "flex items-center gap-4 p-3 rounded-lg cursor-pointer transition border-b border-gray-800 hover:bg-[#1f3528]";
+                    item.onclick = () => toggleSelection(item, profile.id);
+                    
+                    const avatar = profile.avatar_url || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+                    
+                    item.innerHTML = `
+                        <div class="relative">
+                            <img src="${avatar}" class="w-12 h-12 rounded-full object-cover">
+                            <div class="selection-check absolute bottom-0 right-0 w-5 h-5 bg-primary rounded-full flex items-center justify-center hidden border border-black">
+                                <span class="material-symbols-outlined text-black text-[10px] font-bold">check</span>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white">${profile.full_name}</h3>
+                            <p class="text-xs text-gray-400">@${profile.username || "user"}</p>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            } else {
+                list.innerHTML = `<p class="text-center text-gray-500 mt-10">No users found to add.</p>`;
+            }
+        }
+
+        function toggleSelection(element, uid) {
+            const check = element.querySelector('.selection-check');
+            if (selectedUsers.includes(uid)) {
+                selectedUsers = selectedUsers.filter(id => id !== uid);
+                check.classList.add('hidden');
+                element.classList.remove('bg-[#1f3528]');
+            } else {
+                selectedUsers.push(uid);
+                check.classList.remove('hidden');
+                element.classList.add('bg-[#1f3528]');
+            }
+        }
+
+        function handleIconSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                groupIconFile = file;
+                const reader = new FileReader();
+                reader.onload = e => document.getElementById('groupIconPreview').innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function nextStep() {
+            if (currentStep === 1) {
+                if (selectedUsers.length === 0) return alert("Please select at least 1 participant.");
+                currentStep = 2;
+                document.getElementById('step1').classList.add('hidden');
+                document.getElementById('step2').classList.remove('hidden');
+                document.getElementById('step2').classList.add('flex');
+                document.querySelector('#fabBtn span').innerText = "check"; 
+            } else {
+                createGroup();
+            }
+        }
+
+        async function createGroup() {
+            const name = document.getElementById('groupName').value.trim();
+            if (!name) return alert("Please provide a group subject");
+
+            const btn = document.getElementById('fabBtn');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+
+            let iconUrl = "";
+
+            if (groupIconFile) {
+                const fileName = `group_${Date.now()}`;
+                const { error: uploadError } = await window.supabase.storage.from('media').upload(fileName, groupIconFile);
+                if (!uploadError) {
+                    const { data } = window.supabase.storage.from('media').getPublicUrl(fileName);
+                    iconUrl = data.publicUrl;
+                }
+            }
+
+            const { data: group, error } = await window.supabase.from('groups').insert({
+                name: name,
+                avatar_url: iconUrl,
+                created_by: myUserId
+            }).select().single();
+
+            if (error) {
+                alert("Error creating group: " + error.message);
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                return;
+            }
+
+            const members = selectedUsers.map(uid => ({ 
+                group_id: group.id, 
+                user_id: uid,
+                role: 'member'
+            }));
+            
+            members.push({ 
+                group_id: group.id, 
+                user_id: myUserId, 
+                role: 'admin' 
+            });
+
+            const { error: memberError } = await window.supabase.from('group_members').insert(members);
+
+            if(memberError) {
+                console.error(memberError);
+                alert("Group created but members failed to add.");
+            } else {
+                alert("Group Created Successfully!");
+                window.location.replace('home.html');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

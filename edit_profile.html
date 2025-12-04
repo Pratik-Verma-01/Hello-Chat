@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+   
+   <!-- PWA MANIFEST & ICONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2c24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://i.ibb.co/zhxqCBkm/file-00000000572c7209af845b975946de46.png">
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        });
+    }
+</script>
+   
+    <script>
+        tailwind.config = { darkMode: "class", theme: { extend: { colors: { "primary": "#13ec5b", "background-dark": "#102216", "error": "#ff4d4d" }, fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] } } } }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white flex flex-col h-screen">
+
+    <!-- Header -->
+    <div class="p-4 flex items-center bg-[#1A2B20] border-b border-gray-800">
+        <span class="material-symbols-outlined cursor-pointer mr-4" onclick="window.history.back()">arrow_back</span>
+        <h1 class="text-xl font-bold">Edit Profile</h1>
+    </div>
+
+    <div class="flex-1 p-6 flex flex-col items-center overflow-y-auto">
+        
+        <!-- Profile Pic -->
+        <div class="relative mb-8 group cursor-pointer" onclick="document.getElementById('fileInput').click()">
+            <img id="avatarPreview" src="" class="w-32 h-32 rounded-full object-cover border-4 border-[#1A2B20]">
+            <div class="absolute bottom-0 right-0 bg-primary rounded-full p-2 text-black shadow-lg">
+                <span class="material-symbols-outlined text-xl">photo_camera</span>
+            </div>
+            <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+        </div>
+
+        <div class="w-full space-y-5">
+            <!-- Full Name -->
+            <div>
+                <label class="text-gray-400 text-xs uppercase ml-1 font-bold">Full Name</label>
+                <input id="fullName" type="text" class="w-full bg-[#1A2B20] p-4 rounded-xl text-white border border-gray-600 focus:border-primary focus:outline-none mt-1">
+            </div>
+
+            <!-- Username Edit (New Feature) -->
+            <div>
+                <label class="text-gray-400 text-xs uppercase ml-1 font-bold">Username</label>
+                <div class="relative mt-1">
+                    <span class="absolute left-4 top-4 text-gray-400 font-bold">@</span>
+                    <input id="username" type="text" placeholder="username" oninput="checkUsername()"
+                           class="w-full bg-[#1A2B20] border border-gray-600 text-white p-4 pl-10 rounded-xl focus:outline-none transition-colors">
+                    
+                    <!-- Status Icon -->
+                    <div class="absolute right-4 top-4">
+                        <span id="statusIcon" class="material-symbols-outlined text-lg hidden">check_circle</span>
+                    </div>
+                </div>
+                <p id="statusText" class="text-xs ml-2 mt-1 h-4 font-medium transition-all"></p>
+            </div>
+
+            <!-- Bio -->
+            <div>
+                <label class="text-gray-400 text-xs uppercase ml-1 font-bold">Bio</label>
+                <input id="about" type="text" class="w-full bg-[#1A2B20] p-4 rounded-xl text-white border border-gray-600 focus:border-primary focus:outline-none mt-1">
+            </div>
+        </div>
+
+        <button onclick="updateProfile()" id="saveBtn" class="w-full bg-primary text-black font-bold text-lg p-4 rounded-full mt-10 shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:bg-gray-600">
+            Update Profile
+        </button>
+    </div>
+
+    <!-- 1. Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 2. Firebase Config (Auth) -->
+    <script type="module" src="firebase-config.js"></script>
+    <!-- 3. Main Config -->
+    <script src="supabase-config.js"></script>
+
+    <script>
+        let currentUser = null;
+        let newAvatarFile = null;
+        let currentUsername = ""; // To store original username
+        let isUsernameValid = true; // Initially true because current username is valid
+        let typingTimer;
+
+        async function init() {
+            const session = await checkAuth();
+            if(!session) return window.location.replace('login.html');
+            currentUser = session.user;
+
+            // Load Data
+            const { data: profile } = await window.supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+            if(profile) {
+                document.getElementById('fullName').value = profile.full_name || "";
+                document.getElementById('about').value = profile.about || "";
+                document.getElementById('username').value = profile.username || "";
+                currentUsername = profile.username || ""; // Save original
+                
+                document.getElementById('avatarPreview').src = profile.avatar_url || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+            }
+        }
+
+        // --- USERNAME CHECK LOGIC ---
+        function checkUsername() {
+            clearTimeout(typingTimer);
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const saveBtn = document.getElementById('saveBtn');
+            
+            let val = input.value.trim().toLowerCase().replace(/[^a-z0-9_.]/g, "");
+            input.value = val; 
+
+            // If same as current, it's valid
+            if (val === currentUsername) {
+                resetUI();
+                return;
+            }
+
+            // Reset UI
+            statusIcon.classList.add('hidden');
+            statusText.innerText = "";
+            input.classList.remove('border-primary', 'border-error', 'border-yellow-500');
+            input.classList.add('border-gray-600');
+            saveBtn.disabled = true;
+            saveBtn.classList.add('bg-gray-600');
+            saveBtn.classList.remove('bg-primary');
+            isUsernameValid = false;
+
+            if (val.length < 3) {
+                statusText.innerText = "Min 3 chars required";
+                statusText.className = "text-xs ml-2 mt-1 text-gray-500";
+                return;
+            }
+
+            statusText.innerText = "Checking availability...";
+            statusText.className = "text-xs ml-2 mt-1 text-yellow-500";
+            input.classList.add('border-yellow-500');
+
+            typingTimer = setTimeout(async () => {
+                const { data } = await window.supabase.from('profiles').select('id').eq('username', val);
+
+                // Logic: Agar koi aur user mil gaya jiska ye naam hai
+                if (data && data.length > 0 && data[0].id !== currentUser.id) {
+                    markInvalid("Username taken");
+                } else {
+                    markValid("Available");
+                }
+            }, 500);
+        }
+
+        function resetUI() {
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const saveBtn = document.getElementById('saveBtn');
+
+            statusIcon.classList.add('hidden');
+            statusText.innerText = "";
+            input.classList.remove('border-yellow-500', 'border-error', 'border-primary');
+            input.classList.add('border-gray-600');
+            
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('bg-gray-600');
+            saveBtn.classList.add('bg-primary');
+            isUsernameValid = true;
+        }
+
+        function markValid(msg) {
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const saveBtn = document.getElementById('saveBtn');
+
+            statusIcon.innerText = "check_circle";
+            statusIcon.className = "material-symbols-outlined text-lg text-primary";
+            statusIcon.classList.remove('hidden');
+            input.classList.add('border-primary');
+            statusText.innerText = msg;
+            statusText.className = "text-xs ml-2 mt-1 text-primary";
+            
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('bg-gray-600');
+            saveBtn.classList.add('bg-primary');
+            isUsernameValid = true;
+        }
+
+        function markInvalid(msg) {
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            
+            statusIcon.innerText = "cancel";
+            statusIcon.className = "material-symbols-outlined text-lg text-error";
+            statusIcon.classList.remove('hidden');
+            input.classList.add('border-error');
+            statusText.innerText = msg;
+            statusText.className = "text-xs ml-2 mt-1 text-error";
+            
+            isUsernameValid = false;
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if(file) {
+                newAvatarFile = file;
+                const reader = new FileReader();
+                reader.onload = (ev) => document.getElementById('avatarPreview').src = ev.target.result;
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function updateProfile() {
+            if(!isUsernameValid) return alert("Invalid Username");
+
+            const name = document.getElementById('fullName').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const about = document.getElementById('about').value.trim();
+            const btn = document.getElementById('saveBtn');
+
+            if(!name) return alert("Name cannot be empty");
+
+            btn.innerText = "Updating...";
+            btn.disabled = true;
+
+            let updates = { full_name: name, about: about, username: username };
+
+            if(newAvatarFile) {
+                const fileName = `avatar_${currentUser.id}_${Date.now()}`;
+                const { error } = await window.supabase.storage.from('media').upload(fileName, newAvatarFile);
+                if(!error) {
+                    const { data } = window.supabase.storage.from('media').getPublicUrl(fileName);
+                    updates.avatar_url = data.publicUrl;
+                }
+            }
+
+            const { error } = await window.supabase.from('profiles').update(updates).eq('id', currentUser.id);
+
+            if(error) {
+                if(error.code === '23505') alert("Username already exists!");
+                else alert("Update failed: " + error.message);
+                btn.innerText = "Update Profile";
+                btn.disabled = false;
+            } else {
+                alert("Profile Updated!");
+                window.location.replace('settings.html');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

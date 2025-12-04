@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Profile - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    
+    <!-- PWA MANIFEST & ICONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2c24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://i.ibb.co/zhxqCBkm/file-00000000572c7209af845b975946de46.png">
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        });
+    }
+</script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#102216", "error": "#ff4d4d" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background-dark font-display text-white flex flex-col min-h-screen p-6 items-center justify-center">
+
+    <h1 class="text-3xl font-bold mb-2">Create Profile</h1>
+    <p class="text-gray-400 text-sm mb-8">Set up your unique identity.</p>
+
+    <!-- Profile Pic -->
+    <div class="relative mb-8 group cursor-pointer" onclick="document.getElementById('fileInput').click()">
+        <div class="w-32 h-32 bg-[#1A2B20] rounded-full flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden" id="avatarPreview">
+            <span class="material-symbols-outlined text-4xl text-gray-400">person</span>
+        </div>
+        <div class="absolute bottom-0 right-0 bg-primary rounded-full p-2 text-black shadow-lg">
+            <span class="material-symbols-outlined text-xl">photo_camera</span>
+        </div>
+        <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+    </div>
+
+    <!-- Inputs -->
+    <div class="w-full max-w-sm space-y-5">
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Full Name</label>
+            <input id="fullName" type="text" placeholder="e.g. Rahul Sharma" 
+                   class="w-full bg-[#1A2B20] border border-gray-600 text-white p-4 rounded-xl focus:border-primary focus:outline-none mt-1 transition-all">
+        </div>
+
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Unique Username</label>
+            <div class="relative mt-1">
+                <span class="absolute left-4 top-4 text-gray-400 font-bold">@</span>
+                <input id="username" type="text" placeholder="rahul_007" oninput="checkUsername()"
+                       class="w-full bg-[#1A2B20] border border-gray-600 text-white p-4 pl-10 rounded-xl focus:outline-none transition-colors">
+                <div class="absolute right-4 top-4">
+                    <span id="statusIcon" class="material-symbols-outlined text-lg hidden">check_circle</span>
+                </div>
+            </div>
+            <p id="statusText" class="text-xs ml-2 mt-1 h-4 font-medium transition-all"></p>
+        </div>
+        
+        <div>
+            <label class="text-xs text-gray-400 ml-2 uppercase tracking-wider">Bio</label>
+            <input id="about" type="text" value="Hey there! I am using Hello Chat." 
+                   class="w-full bg-[#1A2B20] border border-gray-600 text-gray-300 p-4 rounded-xl focus:border-primary focus:outline-none mt-1">
+        </div>
+    </div>
+
+    <button onclick="saveProfile()" id="saveBtn" disabled
+            class="w-full max-w-sm bg-gray-600 text-black font-bold text-lg p-4 rounded-full mt-10 shadow-lg transition-all opacity-50 cursor-not-allowed">
+        Save & Continue
+    </button>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module" src="firebase-config.js"></script>
+    <script src="supabase-config.js"></script>
+
+    <script>
+        let avatarFile = null;
+        let isUsernameValid = false;
+        let typingTimer;
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                avatarFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // --- CHECK USERNAME ---
+        function checkUsername() {
+            clearTimeout(typingTimer);
+            const input = document.getElementById('username');
+            const statusIcon = document.getElementById('statusIcon');
+            const statusText = document.getElementById('statusText');
+            const saveBtn = document.getElementById('saveBtn');
+            
+            // Clean Input
+            let val = input.value.trim().toLowerCase().replace(/[^a-z0-9_.]/g, "");
+            input.value = val; 
+
+            // Disable Button & Reset UI
+            statusIcon.classList.add('hidden');
+            statusText.innerText = "";
+            input.classList.remove('border-primary', 'border-error', 'border-yellow-500');
+            input.classList.add('border-gray-600');
+            saveBtn.classList.add('bg-gray-600', 'opacity-50', 'cursor-not-allowed');
+            saveBtn.classList.remove('bg-primary', 'opacity-100', 'cursor-pointer');
+            saveBtn.disabled = true;
+            isUsernameValid = false;
+
+            if (val.length < 3) {
+                statusText.innerText = "Min 3 chars required";
+                statusText.className = "text-xs ml-2 mt-1 text-gray-500";
+                return;
+            }
+
+            statusText.innerText = "Checking availability...";
+            statusText.className = "text-xs ml-2 mt-1 text-yellow-500";
+            input.classList.add('border-yellow-500');
+
+            // Debounce 500ms
+            typingTimer = setTimeout(async () => {
+                // Using ilike for case-insensitive check
+                const { data, error } = await window.supabase
+                    .from('profiles')
+                    .select('id')
+                    .ilike('username', val);
+
+                if (error) {
+                    console.error("Check Error:", error);
+                    markInvalid("Connection error. Retry.");
+                } 
+                else if (data && data.length > 0) {
+                    // Agar data mila matlab username taken hai
+                    markInvalid("Username is already taken");
+                } 
+                else {
+                    // Data nahi mila matlab Available hai
+                    markValid("Username available!");
+                }
+            }, 500);
+        }
+
+        function markValid(msg) {
+            document.getElementById('statusIcon').innerText = "check_circle";
+            document.getElementById('statusIcon').className = "material-symbols-outlined text-lg text-primary";
+            document.getElementById('statusIcon').classList.remove('hidden');
+            
+            const input = document.getElementById('username');
+            input.classList.remove('border-yellow-500', 'border-error');
+            input.classList.add('border-primary');
+            
+            const txt = document.getElementById('statusText');
+            txt.innerText = msg;
+            txt.className = "text-xs ml-2 mt-1 text-primary font-bold";
+
+            const btn = document.getElementById('saveBtn');
+            btn.classList.remove('bg-gray-600', 'opacity-50', 'cursor-not-allowed');
+            btn.classList.add('bg-primary', 'opacity-100', 'cursor-pointer');
+            btn.disabled = false;
+            isUsernameValid = true;
+        }
+
+        function markInvalid(msg) {
+            document.getElementById('statusIcon').innerText = "cancel";
+            document.getElementById('statusIcon').className = "material-symbols-outlined text-lg text-error";
+            document.getElementById('statusIcon').classList.remove('hidden');
+            
+            const input = document.getElementById('username');
+            input.classList.remove('border-yellow-500', 'border-primary');
+            input.classList.add('border-error');
+            
+            const txt = document.getElementById('statusText');
+            txt.innerText = msg;
+            txt.className = "text-xs ml-2 mt-1 text-error font-bold";
+            
+            isUsernameValid = false;
+        }
+
+        // --- SAVE PROFILE ---
+        async function saveProfile() {
+            if(!isUsernameValid) return;
+
+            const name = document.getElementById('fullName').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const about = document.getElementById('about').value.trim();
+            const btn = document.getElementById('saveBtn');
+
+            if (!name) return alert("Name is required");
+
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+            
+            const session = await checkAuth();
+            if(!session) return window.location.replace('login.html');
+            const user = session.user;
+
+            let avatarUrl = "";
+
+            if (avatarFile) {
+                const fileName = `avatar_${user.id}_${Date.now()}`;
+                const { error } = await window.supabase.storage.from('media').upload(fileName, avatarFile);
+                if (!error) {
+                    const { data } = window.supabase.storage.from('media').getPublicUrl(fileName);
+                    avatarUrl = data.publicUrl;
+                }
+            }
+
+            // Upsert (Insert or Update)
+            const { error } = await window.supabase.from('profiles').upsert({
+                id: user.id,
+                full_name: name,
+                username: username,
+                about: about,
+                avatar_url: avatarUrl
+            });
+
+            if (error) {
+                if(error.code === '23505') markInvalid("Username already taken!");
+                else alert("Error: " + error.message);
+                
+                btn.innerText = "Save & Continue";
+                btn.disabled = false;
+            } else {
+                window.location.replace('home.html');
+            }
+        }
+    </script>
+</body>
+</html>

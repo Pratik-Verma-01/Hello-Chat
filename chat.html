@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chat - Hello Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/picmo@5.7.6/dist/umd/index.js"></script>
+
+<!-- PWA MANIFEST & ICONS -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f2c24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://i.ibb.co/zhxqCBkm/file-00000000572c7209af845b975946de46.png">
+
+<!-- SERVICE WORKER REGISTRATION -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('PWA Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        });
+    }
+</script>
+
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#13ec5b", "background-dark": "#0b1410", "bubble-dark": "#1f2c24" },
+                    fontFamily: { "display": ["Plus Jakarta Sans", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        body { overscroll-behavior: none; }
+        .attachment-icon { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 5px; }
+        .picmo__picker { --picmo-bg-color: #0b1410; --picmo-text-color: white; border: none !important; width: 100% !important; }
+        .prevent-select { -webkit-user-select: none; user-select: none; }
+    </style>
+</head>
+<body class="bg-background-dark font-display text-white h-screen flex flex-col overflow-hidden relative">
+
+    <!-- ATTACHMENT MENU -->
+    <div id="attachmentMenu" class="fixed inset-0 bg-black/60 z-50 hidden flex-col justify-end" onclick="closeAttachmentMenu()">
+        <div class="bg-[#1A2B20] p-6 rounded-t-3xl mx-2 mb-16 shadow-2xl border border-gray-700" onclick="event.stopPropagation()">
+            <div class="grid grid-cols-3 gap-6 text-center">
+                <div class="flex flex-col items-center cursor-pointer" onclick="triggerFile('doc')"><div class="attachment-icon bg-indigo-500 text-white"><span class="material-symbols-outlined text-3xl">description</span></div><span class="text-xs">Document</span></div>
+                <div class="flex flex-col items-center cursor-pointer" onclick="openCamera()"><div class="attachment-icon bg-pink-500 text-white"><span class="material-symbols-outlined text-3xl">photo_camera</span></div><span class="text-xs">Camera</span></div>
+                <div class="flex flex-col items-center cursor-pointer" onclick="triggerFile('image')"><div class="attachment-icon bg-purple-500 text-white"><span class="material-symbols-outlined text-3xl">image</span></div><span class="text-xs">Gallery</span></div>
+                <div class="flex flex-col items-center cursor-pointer" onclick="triggerFile('audio')"><div class="attachment-icon bg-orange-500 text-white"><span class="material-symbols-outlined text-3xl">headphones</span></div><span class="text-xs">Audio</span></div>
+                <div class="flex flex-col items-center cursor-pointer" onclick="sendLocation()"><div class="attachment-icon bg-green-500 text-white"><span class="material-symbols-outlined text-3xl">location_on</span></div><span class="text-xs">Location</span></div>
+                <div class="flex flex-col items-center cursor-pointer" onclick="goToInfo()"><div class="attachment-icon bg-blue-500 text-white"><span class="material-symbols-outlined text-3xl">person</span></div><span class="text-xs">Contact</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CAMERA MODAL -->
+    <div id="cameraModal" class="fixed inset-0 bg-black z-[60] hidden flex-col"><video id="videoElement" autoplay playsinline class="w-full h-full object-cover"></video><canvas id="canvasElement" class="hidden"></canvas><div class="absolute bottom-10 w-full flex justify-center items-center gap-8 z-[70]"><span class="material-symbols-outlined text-white text-4xl cursor-pointer bg-black/50 rounded-full p-2" onclick="closeCamera()">close</span><button onclick="captureAndSend()" class="w-20 h-20 bg-white rounded-full border-4 border-gray-300 shadow-lg active:scale-90 transition"></button><span class="material-symbols-outlined text-white text-4xl cursor-pointer bg-black/50 rounded-full p-2" onclick="switchCamera()">cameraswitch</span></div></div>
+
+    <!-- MESSAGE OPTIONS MODAL -->
+    <div id="msgOptionsModal" class="fixed inset-0 bg-black/80 z-[80] hidden flex-col justify-end" onclick="closeMsgOptions()">
+        <div class="bg-[#1f2c24] p-4 rounded-t-2xl space-y-2 border-t border-gray-700 pb-8" onclick="event.stopPropagation()">
+            <div class="flex justify-center mb-4"><div class="w-12 h-1 bg-gray-600 rounded-full"></div></div>
+            <button onclick="copySelectedMessage()" class="w-full flex items-center gap-3 p-3 hover:bg-white/10 rounded-lg text-white"><span class="material-symbols-outlined">content_copy</span> Copy</button>
+            <button onclick="deleteMessage('me')" class="w-full flex items-center gap-3 p-3 hover:bg-white/10 rounded-lg text-white"><span class="material-symbols-outlined">delete</span> Delete for Me</button>
+            <button id="deleteEveryoneBtn" onclick="deleteMessage('everyone')" class="w-full flex items-center gap-3 p-3 hover:bg-red-500/20 rounded-lg text-red-500 hidden"><span class="material-symbols-outlined">delete_forever</span> Delete for Everyone</button>
+        </div>
+    </div>
+
+    <!-- HEADER MENU -->
+    <div id="headerMenu" class="absolute top-14 right-2 bg-[#1A2B20] border border-gray-700 rounded-lg shadow-xl z-[100] hidden w-48">
+        <button onclick="window.location.href='create_group.html'" class="w-full text-left px-4 py-3 hover:bg-white/10 text-sm flex items-center gap-2"><span class="material-symbols-outlined text-sm">group_add</span> Create Group</button>
+        <button onclick="window.location.reload()" class="w-full text-left px-4 py-3 hover:bg-white/10 text-sm">Refresh</button>
+        <button onclick="clearChat()" class="w-full text-left px-4 py-3 hover:bg-white/10 text-sm text-red-400">Clear Chat</button>
+        <button onclick="goToInfo()" class="w-full text-left px-4 py-3 hover:bg-white/10 text-sm">View Contact</button>
+    </div>
+
+    <!-- HEADER -->
+    <div class="bg-[#1f2c24] p-3 flex items-center justify-between shadow-md z-30 shrink-0 border-b border-gray-800 relative">
+        <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-gray-300 cursor-pointer p-2 -ml-2" onclick="window.location.replace('home.html')">arrow_back</span>
+            <img id="headerAvatar" src="https://cdn-icons-png.flaticon.com/512/149/149071.png" class="w-10 h-10 rounded-full object-cover border border-gray-600">
+            <div class="flex flex-col" onclick="goToInfo()">
+                <h2 id="headerName" class="font-bold text-white text-base leading-tight cursor-pointer truncate max-w-[120px]">Loading...</h2>
+                <p id="userStatus" class="text-[10px] text-primary font-medium">Online</p>
+            </div>
+        </div>
+        <div class="flex gap-4 text-white pr-2">
+            <span class="material-symbols-outlined cursor-pointer text-xl" onclick="initiateCall('video')">videocam</span>
+            <span class="material-symbols-outlined cursor-pointer text-xl" onclick="initiateCall('audio')">call</span>
+            <span class="material-symbols-outlined cursor-pointer text-xl" onclick="toggleMenu(event)">more_vert</span>
+        </div>
+    </div>
+
+    <!-- MESSAGES AREA -->
+    <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-fixed bg-opacity-5 pb-24" onclick="closeAllMenus()"></div>
+
+    <!-- INPUT AREA -->
+    <div class="fixed bottom-0 left-0 w-full bg-background-dark p-2 flex flex-col z-40 border-t border-gray-800 safe-bottom">
+        <div id="emojiContainer" class="hidden w-full h-64 bg-[#0b1410]"></div>
+        <div class="flex items-end gap-2 w-full">
+            <div class="flex-1 bg-[#1f2c24] rounded-3xl flex items-center px-2 py-2 shadow-lg border border-gray-700 min-w-0 transition-all">
+                <button class="text-gray-400 hover:text-yellow-400 p-2 shrink-0" onclick="toggleEmojiPicker(event)"><span id="emojiBtnIcon" class="material-symbols-outlined text-2xl">mood</span></button>
+                <input id="msgInput" type="text" placeholder="Message" oninput="toggleSendButton()" onfocus="hideEmojiPicker()" class="flex-1 bg-transparent text-white placeholder-gray-500 px-2 focus:outline-none text-base h-10 min-w-0" autocomplete="off">
+                <input type="file" id="fileInput" class="hidden" onchange="uploadFile(this)">
+                <button class="text-gray-400 rotate-[-45deg] hover:text-white p-2 shrink-0" onclick="toggleAttachmentMenu()"><span class="material-symbols-outlined text-2xl">attach_file</span></button>
+                <button class="text-gray-400 hover:text-white p-2 shrink-0" onclick="openCamera()"><span class="material-symbols-outlined text-2xl">photo_camera</span></button>
+            </div>
+            <button id="actionBtn" onclick="handleAction()" class="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform shrink-0 mb-1">
+                <span id="actionIcon" class="material-symbols-outlined text-black font-bold text-2xl">mic</span>
+            </button>
+        </div>
+    </div>
+
+    <script type="module" src="firebase-config.js"></script>
+    <script src="supabase-config.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const receiverId = urlParams.get('uid');
+        const groupId = urlParams.get('gid');
+        let currentUser = null, isGroupChat = !!groupId, activeChatId = groupId || receiverId;
+        let selectedMsgId = null, selectedMsgContent = "";
+        let picker=null, isRecording=false, mediaRecorder=null, audioChunks=[], videoStream=null, useFrontCamera=false, fileType='image';
+
+        async function initChat() {
+            const session = await checkAuth();
+            if(!session) { window.location.replace('login.html'); return; }
+            currentUser = session.user;
+
+            if (!activeChatId) { alert("Invalid Chat"); window.location.replace('home.html'); return; }
+
+            if (isGroupChat) {
+                const { data: group } = await window.supabase.from('groups').select('*').eq('id', groupId).single();
+                if(group) {
+                    document.getElementById('headerName').innerText = group.name;
+                    document.getElementById('userStatus').innerText = "Group Chat";
+                    if(group.avatar_url) document.getElementById('headerAvatar').src = group.avatar_url;
+                }
+            } else {
+                const { data: profile } = await window.supabase.from('profiles').select('*').eq('id', receiverId).single();
+                if(profile) {
+                    document.getElementById('headerName').innerText = profile.full_name;
+                    if(profile.avatar_url) document.getElementById('headerAvatar').src = profile.avatar_url;
+                }
+                const channel = window.supabase.channel('global_presence');
+                channel.on('presence', { event: 'sync' }, () => { const state = channel.presenceState(); const isOnline = Object.values(state).flat().some(u => u.user_id === receiverId); document.getElementById('userStatus').innerText = isOnline ? "Online" : "Offline"; }).subscribe();
+            }
+
+            if (!isGroupChat) await window.supabase.from('messages').update({ is_read: true }).eq('receiver_id', currentUser.id).eq('sender_id', receiverId).eq('is_read', false);
+            loadMessages(); subscribeRealtime(); initEmojiPicker();
+        }
+
+        // --- RENDER ---
+        async function renderMessage(msg) {
+            if (msg.deleted_by && msg.deleted_by.includes(currentUser.id)) return;
+            const isMe = msg.sender_id === currentUser.id;
+            const container = document.getElementById('messagesContainer');
+            
+            // KEY LOGIC: Use message data for consistent key gen
+            const secretKey = isGroupChat ? groupId : [msg.sender_id, msg.receiver_id].sort().join('_');
+            
+            let contentHtml = "";
+            let plainText = "";
+
+            if (msg.type === 'image') { contentHtml = `<img src="${msg.media_url}" class="rounded-lg w-48 mt-1 cursor-pointer" onclick="window.open(this.src)">`; plainText = "Photo"; }
+            else if (msg.type === 'audio') { contentHtml = `<audio controls src="${msg.media_url}" class="w-48 h-8 mt-1"></audio>`; plainText = "Audio"; }
+            else if (msg.type === 'file') { contentHtml = `<div class="flex items-center gap-2 bg-black/20 p-2 rounded-lg cursor-pointer" onclick="window.open('${msg.media_url}')"><span class="material-symbols-outlined text-red-400">description</span><span class="text-sm underline truncate max-w-[150px]">${msg.file_name || 'Document'}</span></div>`; plainText = "Document"; }
+            else {
+                try { 
+                    plainText = await decryptMessage(msg.content, secretKey); 
+                    if(plainText.includes('google.com/maps')) contentHtml = `<a href="${plainText}" target="_blank" class="text-blue-400 underline flex items-center gap-1"><span class="material-symbols-outlined text-sm">location_on</span> Location</a>`;
+                    else contentHtml = plainText;
+                } catch(e) { contentHtml = "🔒 Encrypted"; }
+            }
+
+            let tickHtml = "";
+            if (isMe) {
+                const tickColor = msg.is_read ? "text-blue-400" : "text-gray-400";
+                tickHtml = `<span class="material-symbols-outlined text-[14px] ${tickColor}">done_all</span>`;
+            }
+
+            const div = document.createElement('div');
+            div.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'} mb-1 prevent-select`;
+            div.id = `msg-${msg.id}`;
+            
+            let pressTimer;
+            div.ontouchstart = () => { pressTimer = setTimeout(() => handleLongPress(msg.id, plainText, msg.sender_id), 600); };
+            div.ontouchend = () => { clearTimeout(pressTimer); };
+            div.oncontextmenu = (e) => { e.preventDefault(); handleLongPress(msg.id, plainText, msg.sender_id); };
+
+            div.innerHTML = `<div class="max-w-[80%] px-3 py-2 rounded-xl shadow-sm relative text-sm leading-relaxed break-words ${isMe ? 'bg-primary text-black rounded-tr-none' : 'bg-[#1f2c24] text-white rounded-tl-none'}">${contentHtml}<div class="text-[9px] text-right opacity-70 mt-1 flex justify-end items-center gap-1 font-mono">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} ${tickHtml}</div></div>`;
+            container.appendChild(div);
+        }
+
+        // --- LOAD & REALTIME ---
+        async function loadMessages() {
+            let query = window.supabase.from('messages').select('*').order('created_at', { ascending: true });
+            if (isGroupChat) query = query.eq('receiver_id', groupId);
+            else query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUser.id})`);
+            const { data } = await query;
+            if(data) { for (const msg of data) { await renderMessage(msg); } scrollToBottom(); }
+        }
+        function subscribeRealtime() { window.supabase.channel('public:messages').on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (p) => { if(p.eventType==='INSERT'){ if(isGroupChat && p.new.receiver_id===groupId){await renderMessage(p.new);scrollToBottom();}else if(!isGroupChat && ((p.new.sender_id===currentUser.id && p.new.receiver_id===receiverId)||(p.new.sender_id===receiverId && p.new.receiver_id===currentUser.id))){await renderMessage(p.new);scrollToBottom();if(p.new.receiver_id===currentUser.id)await window.supabase.from('messages').update({is_read:true}).eq('id',p.new.id);} } else if(p.eventType==='UPDATE'){ const el=document.getElementById(`msg-${p.new.id}`); if(el && p.new.deleted_by && p.new.deleted_by.includes(currentUser.id)) el.remove(); else if(el && p.new.is_read && p.new.sender_id===currentUser.id){ const t=el.querySelector('.material-symbols-outlined'); if(t && t.innerText==='done_all'){t.classList.remove('text-gray-400');t.classList.add('text-blue-400');} } } else if(p.eventType==='DELETE'){ const el=document.getElementById(`msg-${p.old.id}`); if(el)el.remove(); } }).subscribe(); }
+
+        // --- SEND ---
+        async function sendMessage() {
+            const input = document.getElementById('msgInput');
+            const text = input.value.trim();
+            if(!text) return;
+            const secretKey = isGroupChat ? groupId : [currentUser.id, receiverId].sort().join('_');
+            const encryptedText = await encryptMessage(text, secretKey);
+            input.value = ''; toggleSendButton(); hideEmojiPicker();
+            const messageData = { sender_id: currentUser.id, content: encryptedText, type: 'text', receiver_id: activeChatId };
+            await window.supabase.from('messages').insert(messageData);
+        }
+
+        // --- TOOLS ---
+        function copySelectedMessage() { 
+            if (!selectedMsgContent) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(selectedMsgContent).then(()=>alert("Copied")).catch(()=>fallbackCopy(selectedMsgContent)); }
+            else { fallbackCopy(selectedMsgContent); }
+            closeMsgOptions();
+        }
+        function fallbackCopy(text) { const t=document.createElement("textarea"); t.value=text; document.body.appendChild(t); t.select(); try{document.execCommand('copy'); alert("Copied");}catch(e){} document.body.removeChild(t); }
+
+        // ... (Rest of functions: Camera, Attachment, Calls, Emoji, Long Press are standard) ...
+        function goToInfo() { if (isGroupChat) window.location.href = `group_settings.html?gid=${groupId}`; else window.location.href = `contact_info.html?uid=${receiverId}`; }
+        function toggleMenu(e) { if(e) e.stopPropagation(); document.getElementById('headerMenu').classList.toggle('hidden'); }
+        function closeAllMenus() { document.getElementById('headerMenu').classList.add('hidden'); document.getElementById('attachmentMenu').classList.add('hidden'); document.getElementById('attachmentMenu').classList.remove('flex'); hideEmojiPicker(); }
+        function toggleAttachmentMenu() { const m = document.getElementById('attachmentMenu'); if(m.classList.contains('hidden')){m.classList.remove('hidden');m.classList.add('flex')}else closeAttachmentMenu(); }
+        function closeAttachmentMenu() { document.getElementById('attachmentMenu').classList.add('hidden'); document.getElementById('attachmentMenu').classList.remove('flex'); }
+        async function clearChat() { closeAllMenus(); if(confirm("Clear chat for YOU?")) { let q=window.supabase.from('messages').select('id,deleted_by'); if(isGroupChat) q=q.eq('receiver_id',groupId); else q=q.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUser.id})`); const {data}=await q; if(data){for(const m of data){let d=m.deleted_by||[];if(!d.includes(currentUser.id)){d.push(currentUser.id);await window.supabase.from('messages').update({deleted_by:d}).eq('id',m.id);}}} location.reload(); } }
+        function handleLongPress(id,c,sid) { selectedMsgId=id; selectedMsgContent=c; document.getElementById('deleteEveryoneBtn').classList.toggle('hidden', sid!==currentUser.id); document.getElementById('msgOptionsModal').classList.remove('hidden'); document.getElementById('msgOptionsModal').classList.add('flex'); }
+        function closeMsgOptions() { document.getElementById('msgOptionsModal').classList.add('hidden'); document.getElementById('msgOptionsModal').classList.remove('flex'); }
+        async function deleteMessage(type) { if(!selectedMsgId)return; if(type==='everyone'){ if(confirm("Delete for everyone?")) await window.supabase.from('messages').delete().eq('id',selectedMsgId); } else { const {data}=await window.supabase.from('messages').select('deleted_by').eq('id',selectedMsgId).single(); let d=data.deleted_by||[]; if(!d.includes(currentUser.id)){ d.push(currentUser.id); await window.supabase.from('messages').update({deleted_by:d}).eq('id',selectedMsgId); } document.getElementById(`msg-${selectedMsgId}`).remove(); } closeMsgOptions(); }
+
+        // Helper functions for media/camera/etc. (Minimizing for length but assume included)
+        function triggerFile(t){fileType=t;const i=document.getElementById('fileInput');if(t==='image')i.accept="image/*";else if(t==='audio')i.accept="audio/*";else i.accept=".pdf,.doc,.docx,.txt";closeAttachmentMenu();i.click()}
+        async function uploadFile(i){const f=i.files[0];if(!f)return;const n=`chat_${Date.now()}_${f.name}`;const{error}=await window.supabase.storage.from('media').upload(n,f);if(!error){const{data}=window.supabase.storage.from('media').getPublicUrl(n);let t='image';if(fileType==='audio')t='audio';if(fileType==='doc')t='file';const r=isGroupChat?groupId:receiverId;await window.supabase.from('messages').insert({sender_id:currentUser.id,receiver_id:r,type:t,media_url:data.publicUrl,file_name:f.name})}else alert("Upload Failed")}
+        async function initiateCall(t){if(isGroupChat)return alert("Group calls soon!");const{data}=await window.supabase.from('calls').insert({caller_id:currentUser.id,receiver_id:receiverId,type:t,status:'ringing'}).select();if(data)window.location.href=`video_call.html?call_id=${data[0].id}&type=${t}`}
+        function sendLocation(){closeAttachmentMenu();if(!navigator.geolocation)return alert("No GPS");navigator.geolocation.getCurrentPosition(p=>{const l=`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`;sendDirectMessage(l)})}
+        async function sendDirectMessage(c){const k=isGroupChat?groupId:[currentUser.id,receiverId].sort().join('_');const e=await encryptMessage(c,k);const r=isGroupChat?groupId:receiverId;await window.supabase.from('messages').insert({sender_id:currentUser.id,receiver_id:r,content:e,type:'text'})}
+        async function openCamera(){closeAttachmentMenu();document.getElementById('cameraModal').classList.remove('hidden');document.getElementById('cameraModal').classList.add('flex');startStream()}
+        async function startStream(){try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:useFrontCamera?"user":"environment"}});document.getElementById('videoElement').srcObject=s;videoStream=s}catch(e){alert("Camera Error");closeCamera()}}
+        function closeCamera(){if(videoStream)videoStream.getTracks().forEach(t=>t.stop());document.getElementById('cameraModal').classList.add('hidden');document.getElementById('cameraModal').classList.remove('flex')}
+        function switchCamera(){if(videoStream)videoStream.getTracks().forEach(t=>t.stop());useFrontCamera=!useFrontCamera;startStream()}
+        async function captureAndSend(){const v=document.getElementById('videoElement');const c=document.getElementById('canvasElement');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);closeCamera();c.toBlob(async b=>{const n=`cam_${Date.now()}.png`;const{error}=await window.supabase.storage.from('media').upload(n,b);if(!error){const{data}=window.supabase.storage.from('media').getPublicUrl(n);const r=isGroupChat?groupId:receiverId;await window.supabase.from('messages').insert({sender_id:currentUser.id,receiver_id:r,type:'image',media_url:data.publicUrl})}})}
+        function initEmojiPicker(){const c=document.getElementById('emojiContainer');picker=picmo.createPicker({rootElement:c,theme:'dark',showPreview:false,autoFocus:false});picker.addEventListener('emoji:select',s=>{const i=document.getElementById('msgInput');i.value+=s.emoji;toggleSendButton()})}
+        function toggleEmojiPicker(e){if(e)e.stopPropagation();const c=document.getElementById('emojiContainer');const i=document.getElementById('emojiBtnIcon');const n=document.getElementById('msgInput');if(c.classList.contains('hidden')){n.blur();c.classList.remove('hidden');i.innerText="keyboard"}else{c.classList.add('hidden');i.innerText="mood";n.focus()}}
+        function hideEmojiPicker(){document.getElementById('emojiContainer').classList.add('hidden');document.getElementById('emojiBtnIcon').innerText="mood"}
+        function toggleSendButton(){document.getElementById('actionIcon').innerText=document.getElementById('msgInput').value.trim().length>0?"send":"mic"}
+        function handleAction(){document.getElementById('actionIcon').innerText==='send'?sendMessage():handleRecording()}
+        async function handleRecording(){const b=document.getElementById('actionBtn');const i=document.getElementById('actionIcon');if(!isRecording){try{const s=await navigator.mediaDevices.getUserMedia({audio:true});mediaRecorder=new MediaRecorder(s);audioChunks=[];mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);mediaRecorder.onstop=async()=>{sendAudio(new Blob(audioChunks,{type:'audio/webm'}))};mediaRecorder.start();isRecording=true;b.classList.replace('bg-primary','bg-red-500');i.innerText='stop';document.getElementById('msgInput').placeholder='Recording...'}catch(e){alert("Mic Error")}}else{mediaRecorder.stop();isRecording=false;b.classList.replace('bg-red-500','bg-primary');i.innerText='mic';document.getElementById('msgInput').placeholder='Message'}}
+        async function sendAudio(b){const n=`aud_${Date.now()}.webm`;const{error}=await window.supabase.storage.from('media').upload(n,b);if(!error){const{data}=window.supabase.storage.from('media').getPublicUrl(n);const r=isGroupChat?groupId:receiverId;await window.supabase.from('messages').insert({sender_id:currentUser.id,receiver_id:r,type:'audio',media_url:data.publicUrl})}}
+        function scrollToBottom(){document.getElementById('messagesContainer').scrollTop=document.getElementById('messagesContainer').scrollHeight}
+        function handleEnter(e){if(e.key==='Enter')sendMessage()}
+
+        initChat();
+    </script>
+</body>
+</html>
